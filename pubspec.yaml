@@ -1,0 +1,86 @@
+name: projeto_cardapio
+description: "A new Flutter project."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.5.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  device_preview: ^1.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/guacamole.png
+    - assets/images/nachos.png
+    - assets/images/quesadilla.png
+    - assets/images/tacos_pollo.png
+    - assets/images/sopes.png
+    - assets/images/ceviche.png
+    - assets/images/elote.png
+    - assets/images/chiles_nogada.png
+    - assets/images/tamales.png
+    - assets/images/tostadas.png
+    - assets/images/flautas.png
+    - assets/images/chimichangas.png
+    - assets/images/aguachile.png
+    - assets/images/queso_fundido.png
+    - assets/images/guacamole_chapulines.png
+    - assets/images/tacos_al_pastor.png
+    - assets/images/burrito.png
+    - assets/images/enchiladas.png
+    - assets/images/chiles_rellenos.png
+    - assets/images/carnitas.png
+    - assets/images/fajitas.png
+    - assets/images/mole_poblano.png
+    - assets/images/camarones_diabla.png
+    - assets/images/sopes_carne.png
+    - assets/images/tortas.png
+    - assets/images/pescado_veracruzana.png
+    - assets/images/bandeja_paisa.png
+    - assets/images/pozole.png
+    - assets/images/tacos_pescado.png
+    - assets/images/tlayudas.png
+    - assets/images/margarita.png
+    - assets/images/horchata.png
+    - assets/images/agua_jamaica.png
+    - assets/images/tequila.png
+    - assets/images/beer.png
+    - assets/images/michelada.png
+    - assets/images/aguas_frescas.png
+    - assets/images/cerveza_trigo.png
+    - assets/images/sangria.png
+    - assets/images/paloma.png
+    - assets/images/cerveza_oscura.png
+    - assets/images/cerveza_artesanal.png
+    - assets/images/daiquiri.png
+    - assets/images/cafe_olla.png
+    - assets/images/tepache.png
+    - assets/images/cerveza_framboesa.png
+    - assets/images/limonada.png
+    - assets/images/churros.png
+    - assets/images/flan.png
+    - assets/images/tres_leches.png
+    - assets/images/capirotada.png
+    - assets/images/dulce_de_leche.png
+    - assets/images/galletas_chocolate.png
+    - assets/images/natilla.png
+    - assets/images/cocadas.png
+    - assets/images/paletas.png
+    - assets/images/mole_dulce.png
+    - assets/images/papel_dulce.png
+    - assets/images/tarta_limon.png
+    - assets/images/biscoitos_amendoas.png
+    - assets/images/helado_frutas.png
+    - assets/images/cafe_leche.png
+    - assets/images/bunuelos.png
+    - assets/images/logos.png
