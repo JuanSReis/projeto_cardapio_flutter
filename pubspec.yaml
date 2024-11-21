@@ -10,7 +10,10 @@ dependencies:
   flutter:
     sdk: flutter
   device_preview: ^1.2.0
-
+  firebase_core: ^3.6.0
+  cloud_firestore: ^5.4.4
+  firebase_auth: ^5.3.1
+  
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -19,7 +22,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  assets:
+assets:
     - assets/images/guacamole.png
     - assets/images/nachos.png
     - assets/images/quesadilla.png

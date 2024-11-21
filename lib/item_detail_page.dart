@@ -1,173 +1,198 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ItemDetailPage extends StatefulWidget {
-  final Map<String, String> item;
-  final List<Map<String, dynamic>> pedido;
+  final String itemId;
+  final String userId; 
 
-  ItemDetailPage({required this.item, required this.pedido});
+  ItemDetailPage({required this.itemId, required this.userId});
 
   @override
   _ItemDetailPageState createState() => _ItemDetailPageState();
 }
 
 class _ItemDetailPageState extends State<ItemDetailPage> {
-  int quantity = 1;
+  Map<String, dynamic>? itemDetails;
+  int _quantity = 1; 
+  double _subtotal = 0.0;
 
-  void addToOrder() {
-    final orderItem = {
-      'name': widget.item['name'],
-      'price': widget.item['price'],
-      'quantity': quantity,
-      'accompaniments': widget.item['accompaniments'],
-      'preparation': widget.item['preparation'],
-      'image': widget.item['image']
-    };
+  @override
+  void initState() {
+    super.initState();
+    _getItemDetails(); 
+  }
 
+  // Função para buscar os detalhes do item no Firestore
+  Future<void> _getItemDetails() async {
+    try {
+      final docSnapshot = await FirebaseFirestore.instance
+          .collection('itens_cardapio')
+          .doc(widget.itemId)
+          .get();
+
+      if (docSnapshot.exists) {
+        setState(() {
+          itemDetails = docSnapshot.data() as Map<String, dynamic>;
+          _subtotal = (itemDetails?['preco'] ?? 0.0) * _quantity;
+        });
+      }
+    } catch (e) {
+      print('Erro ao carregar detalhes do item: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao carregar detalhes do item.')),
+      );
+    }
+  }
+
+  void _alterarQuantidade(int delta) {
     setState(() {
-      widget.pedido.add(orderItem);
+      _quantity = (_quantity + delta).clamp(1, 999); 
+      _subtotal = (itemDetails?['preco'] ?? 0.0) * _quantity;
     });
+  }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${widget.item['name']} adicionado ao pedido!')),
-    );
+  Future<void> _adicionarAoPedido() async {
+    if (itemDetails == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Detalhes do item não encontrados.')),
+      );
+      return;
+    }
+
+    try {
+      final pedidoRef = FirebaseFirestore.instance.collection('pedidos').doc();
+      final now = DateTime.now();
+      final dataHora = "${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute}";
+
+      await pedidoRef.set({
+        'uid': widget.userId, 
+        'status': 'Iniciado',
+        'data_hora': dataHora,
+        'itens': [
+          {
+            'item_id': widget.itemId,
+            'nome': itemDetails?['nome'],
+            'preco': itemDetails?['preco'],
+            'quantidade': _quantity,
+          }
+        ],
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Item adicionado ao pedido!')),
+      );
+
+      Navigator.pop(context);
+    } catch (error) {
+      print('Erro ao adicionar item ao pedido: $error');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao adicionar item ao pedido.')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-
-    String priceString = widget.item['price']!.replaceAll(RegExp(r'[R$ ,]'), '').replaceAll(',', '.');
-    double price = double.tryParse(priceString) ?? 0.0;
-    double subtotal = price * quantity;
-
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.item['name']!),
-        backgroundColor: Color(0xFFD52B1E),
+        title: Text(itemDetails?['nome'] ?? 'Detalhes do Item'),
+        backgroundColor: Colors.red,
       ),
-      body: SingleChildScrollView( 
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.asset(widget.item['image']!, fit: BoxFit.cover),
-            ),
-            SizedBox(height: 10),
-            Text(
-              widget.item['name']!,
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 10),
-            Text(
-              widget.item['description']!,
-              style: TextStyle(fontSize: 16),
-            ),
-            SizedBox(height: 20),
-            Text(
-              'Acompanhamentos: ${widget.item['accompaniments'] ?? "Nenhum"}',
-              style: TextStyle(fontSize: 16),
-            ),
-            SizedBox(height: 10),
-            Text(
-              'Modo de Preparo: ${widget.item['preparation'] ?? "Não especificado"}',
-              style: TextStyle(fontSize: 16),
-            ),
-            SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Preço: ${widget.item['price']}', // Mostra o preço
-                      style: TextStyle(fontSize: 22, color: Colors.green),
+      body: itemDetails == null
+          ? Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start, 
+                children: [
+                  Center(
+                    child: Image.network(
+                      itemDetails?['imagem'] ?? '',
+                      width: MediaQuery.of(context).size.width * 0.7, 
+                      height: MediaQuery.of(context).size.width * 0.7, 
+                      fit: BoxFit.cover,
                     ),
-                    Text(
-                      'Subtotal: R\$ ${((subtotal)/100).toStringAsFixed(2)}', // Mostra o subtotal
-                      style: TextStyle(fontSize: 18, color: Colors.blue),
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    itemDetails?['nome'] ?? '',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
                     ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          if (quantity > 1) {
-                            quantity--;
-                          }
-                        });
-                      },
-                      child: Container(
-                        padding: EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.3),
-                              spreadRadius: 2,
-                              blurRadius: 5,
-                              offset: Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: Icon(Icons.remove, color: Colors.white), // Ícone de menos
+                  ),
+                  SizedBox(height: 8),
+                  // Preço do item
+                  Text(
+                    'R\$ ${(itemDetails?['preco'] ?? 0.0).toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 20,
+                      color: Colors.green[700],
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  // Descrição do item
+                  Text(
+                    itemDetails?['descricao'] ?? 'Descrição não disponível.',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                  SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.remove),
+                        onPressed: _quantity > 1 ? () => _alterarQuantidade(-1) : null,
+                        color: Colors.red,
+                      ),
+                      Text(
+                        '$_quantity',
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.add),
+                        onPressed: () => _alterarQuantidade(1),
+                        color: Colors.green,
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'Subtotal: R\$ ${_subtotal.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
                       ),
                     ),
-                    SizedBox(width: 10),
-                    Text(
-                      '$quantity',
-                      style: TextStyle(fontSize: 24),
-                    ),
-                    SizedBox(width: 10),
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          quantity++;
-                        });
-                      },
-                      child: Container(
-                        padding: EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.green, 
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.3),
-                              spreadRadius: 2,
-                              blurRadius: 5,
-                              offset: Offset(0, 3),
-                            ),
-                          ],
+                  ),
+                  SizedBox(height: 16),
+                  Center(
+                    child: ElevatedButton(
+                      onPressed: _adicionarAoPedido,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
                         ),
-                        child: Icon(Icons.add, color: Colors.white), // Ícone de mais
+                        padding: EdgeInsets.symmetric(horizontal: 50, vertical: 15),
+                      ),
+                      child: Text(
+                        'Adicionar ao Pedido',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
-                  ],
-                ),
-              ],
-            ),
-            SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                addToOrder(); 
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red, 
-                minimumSize: Size(double.infinity, 60), 
-                padding: EdgeInsets.symmetric(vertical: 15), 
-              ),
-              child: Text(
-                'Adicionar ao Pedido',
-                style: TextStyle(color: Colors.white), 
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
     );
   }
 }

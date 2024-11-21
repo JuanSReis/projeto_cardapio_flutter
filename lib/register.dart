@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({Key? key}) : super(key: key);
@@ -20,16 +22,45 @@ class _RegisterPageState extends State<RegisterPage> {
     return regex.hasMatch(email);
   }
 
-  void _register() {
+  void _register() async {
     if (_formKey.currentState!.validate()) {
+      String email = _emailController.text;
       String password = _passwordController.text;
       String confirmPassword = _confirmPasswordController.text;
+      String name = _nameController.text;
 
       if (password == confirmPassword) {
-        Navigator.pop(context, {
-          'email': _emailController.text,
-          'password': _passwordController.text,
-        });
+        try {
+          UserCredential userCredential = await FirebaseAuth.instance
+              .createUserWithEmailAndPassword(email: email, password: password);
+          await FirebaseFirestore.instance
+              .collection('usuarios')
+              .doc(userCredential.user!.uid)
+              .set({
+            "uid": userCredential.user!.uid,
+            "nome": name,
+            "email": email,
+          });
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Usuário cadastrado com sucesso!')),
+          );
+        } on FirebaseAuthException catch (e) {
+          String errorMessage;
+          switch (e.code) {
+            case 'email-already-in-use':
+              errorMessage = 'O email já foi cadastrado.';
+              break;
+            case 'invalid-email':
+              errorMessage = 'O email é inválido.';
+              break;
+            default:
+              errorMessage = 'Erro desconhecido: ${e.code}';
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(errorMessage)),
+          );
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('As senhas não coincidem')),
@@ -101,7 +132,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 onPressed: _register,
                 child: Text('Cadastrar'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green, 
+                  backgroundColor: Colors.green,
                 ),
               ),
             ],

@@ -1,220 +1,219 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-class ResumoPedidoScreen extends StatefulWidget {
-  final List<Map<String, dynamic>> pedido;
+class OrderPage extends StatefulWidget {
+  final String userId;
 
-  ResumoPedidoScreen({required this.pedido});
+  OrderPage({required this.userId});
 
   @override
-  _ResumoPedidoScreenState createState() => _ResumoPedidoScreenState();
+  _OrderPageState createState() => _OrderPageState();
 }
 
-class _ResumoPedidoScreenState extends State<ResumoPedidoScreen> {
-  late List<Map<String, dynamic>> pedido;
-  bool _pedidoConcluido = false; 
+class _OrderPageState extends State<OrderPage> {
+  late Stream<QuerySnapshot> _pedidosStream;
 
   @override
   void initState() {
     super.initState();
-    pedido = widget.pedido; 
+    // Escuta os pedidos do usuário com status 'Iniciado'
+    _pedidosStream = FirebaseFirestore.instance
+        .collection('pedidos')
+        .where('uid', isEqualTo: widget.userId)
+        .where('status', isEqualTo: 'Iniciado')  // Filtro para status 'Iniciado'
+        .snapshots();
   }
 
-  void _alterarQuantidade(int index, int delta) {
-    setState(() {
-      pedido[index]['quantity'] = (pedido[index]['quantity'] + delta).clamp(0, double.infinity).toInt();
-      if (pedido[index]['quantity'] == 0) {
-        pedido.removeAt(index);
-      } else if (pedido[index]['quantity'] == 1 && delta == -1) {
-        _confirmarRemocao(index);
+  // Função para remover um item do pedido e alterar o status para 'Cancelado'
+  Future<void> _removerItem(String pedidoId, String itemId) async {
+    try {
+      final pedidoRef = FirebaseFirestore.instance.collection('pedidos').doc(pedidoId);
+      final pedidoDoc = await pedidoRef.get();
+
+      if (pedidoDoc.exists) {
+        final itens = pedidoDoc['itens'] as List;
+        itens.removeWhere((item) => item['item_id'] == itemId);
+
+        // Atualizando o pedido após remoção
+        await pedidoRef.update({'itens': itens, 'status': 'Cancelado'});
       }
-    });
+    } catch (e) {
+      print('Erro ao remover item: $e');
+    }
   }
 
-  void _confirmarRemocao(int index) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Confirmar Exclusão'),
-          content: Text('Você realmente deseja remover "${pedido[index]['name']}" do pedido?'),
+  // Função para alterar a quantidade do item
+  Future<void> _alterarQuantidade(String pedidoId, String itemId, int novaQuantidade) async {
+    try {
+      final pedidoRef = FirebaseFirestore.instance.collection('pedidos').doc(pedidoId);
+      final pedidoDoc = await pedidoRef.get();
+
+      if (pedidoDoc.exists) {
+        final itens = pedidoDoc['itens'] as List;
+        final itemIndex = itens.indexWhere((item) => item['item_id'] == itemId);
+
+        if (itemIndex != -1) {
+          itens[itemIndex]['quantidade'] = novaQuantidade;
+
+          await pedidoRef.update({'itens': itens});
+        }
+      }
+    } catch (e) {
+      print('Erro ao alterar quantidade: $e');
+    }
+  }
+
+  Future<void> _finalizarPedidos(List<DocumentSnapshot> pedidos) async {
+    try {
+      for (var pedido in pedidos) {
+        final pedidoId = pedido.id;
+        final pedidoRef = FirebaseFirestore.instance.collection('pedidos').doc(pedidoId);
+    
+        await pedidoRef.update({
+          'status': 'Finalizado',
+        });
+      }
+
+      // Exibindo pop-up
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Pedidos Finalizados'),
+          content: Text('Todos os pedidos foram finalizados e logo serão entregues!'),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
               },
-              child: Text('Cancelar'),
-            ),
-            TextButton(
-              onPressed: () {
-                _removerItem(index);
-                Navigator.of(context).pop();
-              },
-              child: Text('Confirmar'),
+              child: Text('OK'),
             ),
           ],
-        );
-      },
-    );
-  }
-
-  void _removerItem(int index) {
-    setState(() {
-      pedido.removeAt(index);
-    });
+        ),
+      );
+    } catch (e) {
+      print('Erro ao finalizar pedidos: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    double total = 0.0;
-
-    for (var item in pedido) {
-      double itemPrice = double.parse(item['price'].replaceAll('R\$ ', '').replaceAll(',', '.'));
-      total += item['quantity'] * itemPrice;
-    }
-
     return Scaffold(
       appBar: AppBar(
         title: Text('Resumo do Pedido'),
         backgroundColor: Colors.red,
       ),
-      body: Column(
-        children: [
-          if (_pedidoConcluido)
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.greenAccent,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'Pedido concluído!',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green[900],
-                  ),
-                ),
-              ),
-            ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: pedido.length,
-              itemBuilder: (context, index) {
-                final item = pedido[index];
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _pedidosStream,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
 
-                double itemPrice = double.parse(item['price'].replaceAll('R\$ ', '').replaceAll(',', '.'));
-                double itemTotal = item['quantity'] * itemPrice;
+          if (snapshot.hasError) {
+            return Center(child: Text('Erro ao carregar dados: ${snapshot.error}'));
+          }
 
-                return Card(
-                  margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                  elevation: 4,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return Center(child: Text('Nenhum pedido encontrado.'));
+          }
+
+          final pedidos = snapshot.data!.docs;
+          List<dynamic> todosItens = []; // Lista para armazenar todos os itens
+          double total = 0;
+
+          // Percorrendo os pedidos e somando os itens
+          for (var pedido in pedidos) {
+            final itens = pedido['itens'] as List;
+            if (itens.isNotEmpty) {
+              todosItens.addAll(itens);
+
+              // Calculando o total
+              for (var item in itens) {
+                total += item['preco'] * item['quantidade'];
+              }
+            }
+          }
+
+          if (todosItens.isEmpty) {
+            return Center(child: Text('Nenhum item no pedido.'));
+          }
+
+          return Column(
+            children: [
+              Expanded(
+                child: ListView.builder(
+                  itemCount: todosItens.length,
+                  itemBuilder: (context, index) {
+                    final item = todosItens[index];
+                    final pedidoId = pedidos[index].id;  // Usando o pedidoId correto para cada item
+
+                    return Column(
                       children: [
-                        Image.asset(item['image']!, width: 50, height: 50, fit: BoxFit.cover),
-                        SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
+                        ListTile(
+                          title: Text(item['nome'] ?? 'Nome do item'),
+                          subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                item['name'],
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                'R\$ ${itemTotal.toStringAsFixed(2)}',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.green,
-                                ),
-                              ),
-                              SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  IconButton(
-                                    icon: Icon(Icons.remove, color: Colors.blue),
-                                    onPressed: () {
-                                      if (item['quantity'] == 1) {
-                                        _confirmarRemocao(index);
-                                      } else {
-                                        _alterarQuantidade(index, -1);
+                              Text('Preço unitário: R\$ ${item['preco'].toStringAsFixed(2)}'),
+                              Text('Quantidade: ${item['quantidade']}'),
+                              Text('Subtotal: R\$ ${(item['preco'] * item['quantidade']).toStringAsFixed(2)}'),
+                            ],
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Botões de quantidade
+                              IconButton(
+                                icon: Icon(Icons.remove, color: Colors.red),
+                                onPressed: item['quantidade'] > 1
+                                    ? () {
+                                        _alterarQuantidade(pedidoId, item['item_id'], item['quantidade'] - 1);
                                       }
-                                    },
-                                  ),
-                                  Text(
-                                    '${item['quantity']}',
-                                    style: TextStyle(fontSize: 16),
-                                  ),
-                                  IconButton(
-                                    icon: Icon(Icons.add, color: Colors.blue),
-                                    onPressed: () => _alterarQuantidade(index, 1),
-                                  ),
-                                  Spacer(),
-                                  IconButton(
-                                    icon: Icon(Icons.delete, color: Colors.red),
-                                    onPressed: () => _confirmarRemocao(index),
-                                  ),
-                                ],
+                                    : null,
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.add, color: Colors.green),
+                                onPressed: () {
+                                  _alterarQuantidade(pedidoId, item['item_id'], item['quantidade'] + 1);
+                                },
+                              ),
+                              // Botão de excluir item
+                              IconButton(
+                                icon: Icon(Icons.remove_circle, color: Colors.red),
+                                onPressed: () {
+                                  _removerItem(pedidoId, item['item_id']);
+                                },
                               ),
                             ],
                           ),
                         ),
+                        Divider(),
+                        SizedBox(height: 16),
                       ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: Container(
-        color: Colors.white,
-        height: 140,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Text(
-                    'Total: R\$ ${total.toStringAsFixed(2)}',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              width: 300,
-              child: ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    _pedidoConcluido = true; 
-                  });
-                },
-                child: Text('Confirmar Pedido'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(vertical: 20),
+                    );
+                  },
                 ),
               ),
-            ),
-          ],
-        ),
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Total: R\$ ${total.toStringAsFixed(2)}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ElevatedButton(
+                      onPressed: () {
+                        // Finalizar todos os pedidos na tela
+                        _finalizarPedidos(pedidos); // Passando todos os pedidos
+                      },
+                      child: Text('Finalizar Pedidos'),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
